@@ -4,11 +4,38 @@ ObservationCount1 = 1st minute + 2nd minute (i.e., silent listening period).
 
 Cleaning script for these data can be found at DMEthier/National-NOS
 
+Install the required packages
+```{r install packages, echo=FALSE, message=FALSE}
+require(naturecounts)
+require(lubridate)
+require(reshape)
+require(ggplot2)
+require(mgcv) #used for the GAM spline
+require(robustHD)
+require(readr)
+library(RColorBrewer)
+library(tidyverse)
+library(rgdal)
+library(sp)
+library(rgdal)
+library(spdep)
+library(sf)
+library(concaveman)
+library(scales)
+library(INLA)
+#library(brinla)
+library(inlabru)
+library(leaflet)
+
+```
+
 Code to read and append the relevant files from the out directory. This is ObservationCount1 for the national trends. 
 ```{r pull multiple files, echo=FALSE, message=FALSE}
 
 #Read file that was created in ArcGIS. 
 grid<-read.csv("ATOWL_test_dat.csv")
+
+max.yr<-2019
 
 #Read in the events data then filer for just ATOWLS 
 require(plyr)
@@ -72,9 +99,11 @@ m<-1 #for testing each species
   
   print(paste("Currently analyzing species ", m, "/", species.list[m], sep = "")) 
 
+##-----------------------------------------------------------
 #zero fill by merging with the events dataframe. 
 sp.data <- left_join(event.data, sp.data, by = c("RouteIdentifier", "survey_year", "CollectorNumber")) %>% mutate(ObservationCount1 = replace(ObservationCount1, is.na(ObservationCount1), 0))
 
+##-----------------------------------------------------------
 # Limit to species observed at least once per route 
 # summarize survey site to determine which species have been observed at least once (looking at the total count column) those with sum <= 1 across all survey years will be dropped from analysis (implies never observed on a route (i.e., outside range or inappropraite habitat))
 
@@ -85,10 +114,12 @@ sp.data <- left_join(event.data, sp.data, by = c("RouteIdentifier", "survey_year
 # limit raw data to these species, i.e., those that were observed at least once on a route 
   sp.data <- merge(sp.data, site.sp.list, by = c("RouteIdentifier"))
 
-#count the number of owls per route as the response varaible. The number of stop on a route is being included as a covarite in the model to control for route level effort
+##-----------------------------------------------------------
+#Count the number of owls per route as the response varaible. The number of stop on a route can be used as a covarite in the model to control for route level effort
 sp.data<-sp.data %>% group_by(RouteIdentifier, survey_year, CollectorNumber, grid_id, nstop, StateProvince, bcr, latitude, longitude) %>% summarise(count1=sum(ObservationCount1))
- 
-#create the offset variable which is the number of routes run in a year to control for changes in effor over time. Previously I was using the log transformed nroute as an offset (E), however, this assumes that doubling the number of routes will double the number of owls counted, which may not hold true. The other option is to add nroute as a covariate in the model (Zuur 2018 pg 445). 
+
+#-----------------------------------------------------------   
+#Create the offset variable which is the number of routes run in a year to control for changes in effor over time. Previously I was using the log transformed nroute as an offset (E), however, this assumes that doubling the number of routes will double the number of owls counted, which may not hold true. The other option is to add nroute as a covariate in the model (Zuur 2018 pg 445). 
 
 #the spatailly expict apprach pools counts across geographic statum and deals with the issue of count circles becoming active or inactive over time, thus temporal variability in route level effort. 
 
@@ -96,41 +127,61 @@ sp.data<-sp.data %>% group_by(RouteIdentifier, survey_year, CollectorNumber, gri
 #nroute<-sp.data%>% group_by(survey_year) %>% summarise(nroute=n_distinct(RouteIdentifier))
 #sp.data<-left_join(nroute, sp.data, by="survey_year")
 
-#create a first-year observer effect varaible 
-library(plyr)
-obseff<-NULL #clear previous
-obseff<- ddply(sp.data,~CollectorNumber,function(d)d[which.min(d$survey_year),]) 
-obseff$ObsEffect<-1
-obseff<-obseff %>% select(RouteIdentifier, survey_year, CollectorNumber, ObsEffect)
+##-----------------------------------------------------------  
+#Create a first-year observer effect varaible 
+#did not use this in present analysis since it is not know to effect owl could like those of passerine
+
+#library(plyr)
+#obseff<-NULL #clear previous
+#obseff<- ddply(sp.data,~CollectorNumber,function(d)d[which.min#(d$survey_year),]) 
+#obseff$ObsEffect<-1
+#obseff<-obseff %>% select(RouteIdentifier, survey_year, CollectorNumber, ObsEffect)
+
+#sp.data<-left_join(sp.data, obseff, by=c("RouteIdentifier", "survey_year", "CollectorNumber"))
+#sp.data<-sp.data %>% mutate(ObsEffect = replace(ObsEffect, is.na(ObsEffect), 0)) 
 
 #detach plyr once finished with it because it has a tendancy to mess up the dplyr packages  
-detach(package:plyr)
-library(dplyr) #sometime this will need reinstalled here(?)
+#detach(package:plyr)
+#library(dplyr) #sometime this will need reinstalled here(?)
 
+##-----------------------------------------------------------  
 #create a route-observer effect
 sp.data$routeobs <- paste0(sp.data$RouteIdentifier, "-", sp.data$CollectorNumber)
 
-sp.data<-left_join(sp.data, obseff, by=c("RouteIdentifier", "survey_year", "CollectorNumber"))
-sp.data<-sp.data %>% mutate(ObsEffect = replace(ObsEffect, is.na(ObsEffect), 0)) 
- 
+##----------------------------------------------------------- 
 #standardize year to 2019   
 sp.data <- sp.data %>% mutate(std_yr = survey_year - max.yr)
 
+##-----------------------------------------------------------
+
+map<-leaflet() %>% 
+    addProviderTiles(providers$OpenStreetMap.Mapnik) %>% 
+    addCircleMarkers(data=ATOWLS_Point) 
+    
 #Get grid data for plotting
-ATOWLS_Point <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/National-NOS/Data", layer="ATOWLS_Point") # epsg 102005
-head(ATOWLS_Point@data)
+ATOWLS_Point <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="ATOWLS_Point") 
+# NAD83 (EPSG:4269) 
+head(ATOWLS_Point@data) #"+proj=longlat +datum=NAD83 +no_defs"
 
-ATOWLS_Grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/National-NOS/Data", layer="ATOWLS_Grid")
-names(ATOWLS_Grid)[1] <- "grid_id"; head(ATOWLS_Grid@data)
 
-nos_na_grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/National-NOS/Data", layer="nos_na_grid")
+xy <- data.frame(X = ATOWLS_Point@data$longitude, Y = ATOWLS_Point@data$latitude)
+coordinates(xy) <- c("X", "Y")
+proj4string(xy) <- CRS("+proj=longlat +datum=NAD83 +no_defs")  ## for example
+#assign to the same projection at the polygon feature
+ATOWLS_pt <- spTransform(xy, CRS("+proj=aea +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+
+ATOWLS_Grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="ATOWLS_Grid")
+names(ATOWLS_Grid)[1] <- "grid_id"; head(ATOWLS_Grid@data) #"+proj=aea +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"
+
+nos_na_grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="nos_na_grid")
 nos_na_grid$na_id <- nos_na_grid$id; head(nos_na_grid@data)
 
 plot(nos_na_grid)
 plot(ATOWLS_Grid, col="red", add=T)
 grid1 <- as(ATOWLS_Grid, "sf")
-#plot(ATOWLS_Point, col="blue", add=T) #this did not work correctly due to an issue with projection
-grid_key <- unique(sp.data[, c("grid_id", "bcr")])
+plot(ATOWLS_pt, col="blue", add=T) #this did not work correctly due to an issue with projection
+point1<-as(ATOWLS_pt, "sf")
+grid_key <- unique(sp.data[, c("grid_id", "bcr", "StateProvince")])
 row.names(grid_key) <- NULL
 
 # summarize routes per grid ----------------------------------
@@ -142,16 +193,18 @@ route_per_cell <- sp.data %>%
   mutate(occupied=ifelse(is.na(longitude), 0, 1)) %>% #already removed routes without the species
   group_by(grid_id) %>%
   summarise(number_routes=sum(occupied))
-ggplot(route_per_cell, aes(number_routes)) +
-  geom_histogram(breaks=c(0:20), fill="gray60", color="white") +
-  xlab("Number of routes per grid cell") + ylab("Count")
-summary(route_per_cell)
+
+#ggplot(route_per_cell, aes(number_routes)) +
+#  geom_histogram(breaks=c(0:150), fill="gray60", color="white") +
+#  xlab("Number of routes per grid cell") + ylab("Count")
+
+#summary(route_per_cell)
+
+#print route_per_cell output table 
+write.csv(route_per_cell, paste(out.dir, species.list[m], ".route_per_cell.csv", sep=""))
 
 ##-----------------------------------------------------------
-
-
-
-## make neighbors
+##Make neighbors
 nb1 <- poly2nb(ATOWLS_Grid, row.names=ATOWLS_Grid$grid_id); nb1
 
 #Neighbour list object:
@@ -164,10 +217,11 @@ is.symmetric.nb(nb1, verbose = FALSE, force = TRUE)
 nb2INLA("nb1.graph", nb1)
 nb1.adj <- paste(getwd(),"/nb1.graph", sep="")
 g1 <- inla.read.graph("nb1.graph")
-plot(nb1, coordinates(ATOWLS_Grid), col="red", cex=0.5)
+#plot(nb1, coordinates(ATOWLS_Grid), col="red", cex=0.5)
 
-# index 
-# where i = grid cell, k = route, t = year
+##-----------------------------------------------------------
+#Index variable
+#where i = grid cell, k = route, t = year
 sp.data$eps_i <- sp.data$alpha_i <- as.integer(factor(sp.data$grid_id))
 sp.data$omega_i<-sp.data$tau_i <- sp.data$eps_i
 sp.data$kappa_k <- as.integer(factor(sp.data$routeobs))
@@ -175,19 +229,20 @@ sp.data <- arrange(sp.data, grid_id, std_yr)
 n_routeobs <- max(sp.data$kappa_k, na.rm=T)
 n_cells <- max(sp.data$alpha_i, na.rm=T)
 
-# specify model with year cell effects so that we can predict the annual index value for each cell
-# rather then using the cell ID use the factor assigned previously to alpha_i
+#Specify model with year-cell effects so that we can predict the annual index value for each cell
+#Rather then using the cell ID use the factor assigned previously to alpha_i
 sp.data$gamma_ij <- paste0(sp.data$alpha_i, "-", sp.data$survey_year)
 
+##-----------------------------------------------------------
 # make and run model 
-
 form1 <- count1 ~ -1 + # remove grand mean
   # cell ICAR random intercepts
   f(alpha_i, model="besag", graph=g1, constr=FALSE, scale.model=TRUE,
     hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01)))) +
-  # cell ICAR random effort slopes for nstops 
-  f(eps_i, nstop, model="besag", graph=g1, constr=FALSE, scale.model=TRUE,
-    hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01)))) +
+  # cell ICAR random effort slopes for nstops
+  # not using effort correction for AT dataset alone
+#  f(eps_i, nstop, model="besag", graph=g1, constr=FALSE, scale.model=TRUE,
+#    hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01)))) +
   # cell ICAR random year slopes
   f(tau_i, std_yr, model="besag", graph=g1, constr=FALSE, scale.model=TRUE,
     hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01)))) +
@@ -198,7 +253,8 @@ form1 <- count1 ~ -1 + # remove grand mean
   f(gamma_ij, model="iid", constr=TRUE, 
    hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01))))
 
-# get results
+##-----------------------------------------------------------
+#Get results
 out1<- inla(form1, family="nbinomial", data=sp.data,
             control.compute=list(cpo=T, config=T),
             control.inla=list(strategy="adaptive",
@@ -209,8 +265,8 @@ out1<- inla(form1, family="nbinomial", data=sp.data,
 # view summaries
 summary(out1, digits=3)
 
-## remove cells with no routes
-## have not implemented this in this particular example
+##Remove cells with no routes
+
 cells_with_counts <- unique(sp.data$alpha_i[which(!is.na(sp.data$count1))])
 
 # get alpha summaries
@@ -223,16 +279,16 @@ hist(alph_ll); summary(alph_ll)
 hist(alph_ul); summary(alph_ul)
 
 # get epsilon summaries
-eps <- out1$summary.random$eps_i$`0.5quant`[cells_with_counts]
-eps_ll <- out1$summary.random$eps_i$`0.025quant`[cells_with_counts]
-eps_ul <- out1$summary.random$eps_i$`0.975quant`[cells_with_counts]
-eps_iw <- eps_ul - eps_ll
-hist(eps); summary(eps); round(sum(eps<1)/length(eps), 2)
-hist(eps_ll); summary(eps_ll)
-hist(eps_ul); summary(eps_ul)
-round(sum(eps_ll<=1 & eps_ul>=1)/length(eps_ll), 2)
-round(sum(eps_ll<=0 & eps_ul>=0)/length(eps_ll), 2)
-cor.test(eps, alph, method="spearman")
+#eps <- out1$summary.random$eps_i$`0.5quant`[cells_with_counts]
+#eps_ll <- out1$summary.random$eps_i$`0.025quant`[cells_with_counts]
+#eps_ul <- out1$summary.random$eps_i$`0.975quant`[cells_with_counts]
+#eps_iw <- eps_ul - eps_ll
+#hist(eps); summary(eps); round(sum(eps<1)/length(eps), 2)
+#hist(eps_ll); summary(eps_ll)
+#hist(eps_ul); summary(eps_ul)
+#round(sum(eps_ll<=1 & eps_ul>=1)/length(eps_ll), 2)
+#round(sum(eps_ll<=0 & eps_ul>=0)/length(eps_ll), 2)
+#cor.test(eps, alph, method="spearman")
 
 # get tau summaries
 tau <- (exp(out1$summary.random$tau_i$`0.5quant`[cells_with_counts])
@@ -250,7 +306,8 @@ round(sum(tau_ll<=0 & tau_ul<=0)/length(tau_ll), 2)
 round(sum(tau_ll>=0 & tau_ul>=0)/length(tau_ll), 2)
 cor.test(alph, tau, method="spearman")
 
-# gof
+##-----------------------------------------------------------
+#Goodness of fix (GOF)
 sum(out1$cpo$failure, na.rm=T)
 -2 * sum(log(out1$cpo$cpo[out1$cpo$failure==0]), na.rm=T)
 pit1 <- data.frame(PIT=out1$cpo$pit) %>%
@@ -259,8 +316,8 @@ pit2 <- ggplot(data=pit1, aes(x=PIT)) +
   geom_histogram(col="white") +
   xlab("Probability integral transform (PIT)") +
   ylab("Count"); pit2; summary(pit1$PIT)
-# ------------------------------------------------------------------------------
 
+##-----------------------------------------------------------
 #time series plots per cell
 #calcualte cell level index of abundance
  cell_ts <- function(cell1=1){
@@ -290,15 +347,15 @@ pit2 <- ggplot(data=pit1, aes(x=PIT)) +
    print(cell_ts(i))
  }
 
- # explore posterior samples -----------------------------------------------------------------------------
-posterior_ss <- 10 # change as appropriate
+##-----------------------------------------------------------
+#Explore posterior samples 
+posterior_ss <- 100 # change as appropriate
 samp1 <- inla.posterior.sample(posterior_ss, out1, num.threads=3)
 par_names <- as.character(attr(samp1[[1]]$latent, "dimnames")[[1]])
 post1 <- as.data.frame(sapply(samp1, function(x) x$latent))
 post1$par_names <- par_names
  
- 
- # tau samples
+# tau samples
 tau_samps1 <- post1[grep("tau_i", post1$par_names), ]
 row.names(tau_samps1) <- NULL
 tau_samps1 <- tau_samps1[cells_with_counts, 1:posterior_ss]
@@ -307,54 +364,100 @@ tau_samps2 <- cbind(grid_key[cells_with_counts,], tau_samps1)
 row.names(tau_samps2) <- NULL
 val_names <- grep("V", names(tau_samps2))
 
-# tau_bcr
-tau_bcr <- tau_samps2 %>%
-  dplyr::select(bcr, val_names) %>%
-  mutate(bcr=factor(bcr)) %>%
-  gather(key=key, val=val, -bcr) %>%
+#tau_prov
+tau_prov <- tau_samps2 %>%
+  ungroup() %>%  #this seems to be needed before the select function or it won't work
+  dplyr::select(StateProvince, val_names) %>%
+  mutate(StateProvince=factor(StateProvince)) %>%
+  gather(key=key, val=val, -StateProvince) %>%
   dplyr::select(-key) %>%
-  group_by(bcr) %>%
+  group_by(StateProvince) %>%
   summarise(med_tau=median(val), lcl_tau=quantile(val, probs=0.025),
             ucl_tau=quantile(val, probs=0.975), iw_tau=ucl_tau-lcl_tau,
-            n=n()/posterior_ss); head(tau_bcr)
+            n=n()/posterior_ss); head(tau_prov)
 
 # tau_total
 tau_tot <- tau_samps2 %>%
+  ungroup() %>% # odd why this is needed. Something isn't working right. 
   dplyr::select(val_names) %>%
   as.matrix() %>%
   as.numeric() %>%
   quantile(probs=c(0.5, 0.025, 0.975)); tau_tot
 
+##-----------------------------------------------------------
+#Collect posterior summaries into one dataframe 
+#removed esp
 
-# collect posterior summaries into one dataframe -------------------------------
 post_sum<-NULL
 post_sum <- data.frame(grid_id=cells_with_counts,
                        alph, alph_ll, alph_ul, alph_iw,
-                       eps, eps_ll, eps_ul, eps_iw, eps_sig=NA,
+                       #eps, eps_ll, eps_ul, eps_iw, eps_sig=NA,
                        tau, tau_ll, tau_ul, tau_iw, tau_sig=NA)
-post_sum$eps_sig <- ifelse((post_sum$eps_ll < 1 & post_sum$eps_ul > 1),
-                           post_sum$eps_sig <- NA,
-                           post_sum$eps_sig <- post_sum$eps)
+#post_sum$eps_sig <- ifelse((post_sum$eps_ll < 1 & post_sum$eps_ul > 1),
+#                           post_sum$eps_sig <- NA,
+#                           post_sum$eps_sig <- post_sum$eps)
 post_sum$tau_sig <- ifelse((post_sum$tau_ll < 1 & post_sum$tau_ul > 1),
-                           post_sum$tau_sig <- NA,
+                           post_sum$tau_sig <- 0,
                            post_sum$tau_sig <- post_sum$tau)
-post_sum$bcr <- grid_key$bcr[cells_with_counts]
-#post_sum$state <- grid_key$state[cells_with_counts]
-#post_sum$country <- grid_key$country[cells_with_counts]
+post_sum$prov <- grid_key$StateProvince[cells_with_counts]
+
 summary(post_sum)
 
 #need to back assign the factor grid_id to its original value
-id_grid<-sp.data %>% select(grid_id, alpha_i)
+id_grid<-sp.data %>% ungroup() %>% dplyr::select(grid_id, alpha_i) %>% distinct()
 names(id_grid)[names(id_grid)=="alpha_i"] <- "id"
 names(post_sum)[names(post_sum)=="grid_id"]<-"id"
 post_sum<-merge(post_sum, id_grid, by="id")
 post_sum$grid_id<-as.character(post_sum$grid_id)
 
-# make cell level maps ---------------------------------------------------------
-bcr_map <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/National-NOS/Data", layer="simple_bcr")
-bcr_sf <- as(bcr_map, "sf")
+##-----------------------------------------------------------
+#Make cell level maps
+
+# plot theme
+theme_timeseries <- function (base_size = 11, base_family = "") {
+  theme_grey(base_size = base_size, base_family = base_family) %+replace%
+    theme(panel.background = element_rect(fill = "white", colour = NA),
+          panel.border = element_rect(fill = NA, colour = "grey20"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          axis.text.x = element_text(size = rel(0.9), angle = 0),
+          axis.text.y = element_text(size = rel(0.9), angle = 0),
+          strip.background = element_rect(fill = "grey80"),
+          legend.key = element_rect(fill = "white", colour = NA),
+          plot.title = element_text(size=14, hjust = 0.5,
+                                    margin=margin(t=5, b=10)),
+          legend.position="right",
+          complete = TRUE)
+}; theme_set(theme_timeseries())
+
+# map theme
+theme_map <- function(base_size = 9, base_family = "") {
+  theme_bw(base_size = base_size, base_family = base_family) %+replace%
+    theme(axis.line = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          axis.title = element_blank(),
+          panel.background = element_blank(),
+          panel.border = element_blank(),
+          panel.grid = element_blank(),
+          panel.spacing = unit(0, "lines"),
+          plot.background = element_blank(),
+          legend.background=element_rect(fill=NA, colour=NA),
+          legend.direction="vertical",
+          legend.key=element_rect(fill=NA, colour="white"),
+          legend.text.align=1,
+          legend.text = element_text(size=9),
+          legend.title=element_text(hjust=0, size=11),
+          legend.justification=c(0, 0.5),
+          plot.title = element_text(size=14, hjust = 0.7))
+}
+
+#Changed base map to Altantic provinces. 
+prov_map <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="simple_prov")
+prov_sf <- as(prov_map, "sf")
 post_sum<-distinct(post_sum) #need to take distinct rows
 ATOWLS_Grid@data <- data.frame(ATOWLS_Grid@data, post_sum[match(ATOWLS_Grid@data[,"grid_id"], post_sum[,"grid_id"]),])
+res_sf<-NULL
 res_sf<-as(ATOWLS_Grid, "sf")
 #results_cells <- merge(ATOWLS_Grid, post_sum, by="grid_id", all=F)
 #res_sf <- as(results_cells, "sf")
@@ -362,46 +465,75 @@ plot(res_sf["tau"])
 #ATOWLS_Grid <- ATOWLS_Grid[cells_with_counts, ]
 #plot(ATOWLS_Grid)
 #will want to fix this so I can plot routes too
-#plot(cbc_amro_circles, add=T, pch=16, cex=0.5)
+#plot(routes, add=T, pch=16, cex=0.5)
+
+
+base1 <- ggplot() +
+  geom_sf(data=prov_sf, fill="gray40", col="gray40") +
+  theme_map() + theme(panel.grid.major=element_line(colour="transparent"))
+
+# map route
+route1 <- as(ATOWLS_pt, "sf")
+grid1 <- merge(grid1, route_per_cell, all=T)
+grid1$number_routes[is.na(grid1$number_routes)] <- 0
+
+
+route_p1 <- ggplot() +
+  geom_sf(data=grid1, aes(fill=number_routes), col="gray40", size=0.3) +
+  scale_fill_gradient("A. Routes\nper cell", low = ("white"),
+                      high = muted("orange4"), space = "Lab", trans="log1p",
+                      na.value = "grey40", guide = "colourbar",
+                      breaks=c(0,50,200)) +
+  theme_map() +
+  theme(panel.grid.major=element_line(colour="transparent"))
+
+# map alpha
+alph_p1 <- ggplot() +
+  geom_sf(data=res_sf, aes(fill=alph), col="gray40", size=0.3) +
+  scale_fill_gradient2("B. Alpha", low = muted("purple4"), mid = "white",
+                       high = ("yellow"), midpoint = 0, space = "Lab",
+                       na.value = "grey40", guide = "colourbar", trans="log",
+                       breaks=c(0.5, 1, 2)) +
+  theme_map() + theme(panel.grid.major=element_line(colour="transparent"))
 
 # map tau
 tau_p1 <- ggplot() +
-  geom_sf(data=bcr_sf, fill="gray40", col="gray40") +
   geom_sf(data=res_sf, aes(fill=tau), col="gray40", size=0.3) +
-  scale_fill_gradient2("D. Tau\n(% per year)", low = ("royalblue4"),
+  scale_fill_gradient2("C. Tau\n(% per year)", low = ("royalblue4"),
                        mid = "white",
                        high = ("red4"), midpoint = 0, space = "Lab",
                        na.value = "grey40", guide = "colourbar") +
   theme_map() + theme(panel.grid.major=element_line(colour="transparent"))
+
 tau_p2 <- ggplot() +
-  geom_sf(data=bcr_sf, fill="gray40", col="gray40") +
   geom_sf(data=res_sf, aes(fill=tau_iw), col="gray40", size=0.3) +
-  scale_fill_gradient2("F. Tau\ncredible\ninterval\nwidth\n(% per year)",
+  scale_fill_gradient2("D. Tau\ncredible\ninterval\nwidth\n(% per year)",
                        low = ("purple4"), mid = "white",
                        high = ("green4"), midpoint = 6, space = "Lab",
                        na.value = "grey40", guide = "colourbar",
-                       breaks=c(3,6,9,12)) +
+                       #breaks=c(3,6,9,12)
+                       ) +
   theme_map() + theme(panel.grid.major=element_line(colour="transparent"))
+
 tau_p3 <- ggplot() +
-  geom_sf(data=bcr_sf, fill="gray40", col="gray40") +
   geom_sf(data=res_sf, aes(fill=tau_sig), col="gray40", size=0.3) +
   scale_fill_gradient2("E. Significant\ntau (% per year)",
                        low = muted("royalblue4"), mid = "gray95",
                        high = muted("red4"), midpoint = 0, space = "Lab",
                        na.value = "grey40", guide = "colourbar") +
   theme_map() + theme(panel.grid.major=element_line(colour="transparent"))
- multiplot(tau_p1, tau_p3, tau_p2, cols=2)
+
+ multiplot(base1, alph_p1, tau_p2, route_p1, tau_p1, tau_p3, cols=2)
  
- 
-# aggregate results ------------------------------------------------------------
-# summarise at bcr
-new_bcr <- post_sum %>% group_by(bcr) %>%
+##----------------------------------------------------------- 
+# aggregate results 
+# summarise at prov
+new_prov <- post_sum %>% group_by(prov) %>%
   summarise(new_med_tau=median(tau), new_med_prec=median(tau_iw),
             new_min_prec=min(tau_iw), new_max_prec=max(tau_iw))
 
 
-
-
-
 } #end species loop
+
 ```
+
