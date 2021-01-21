@@ -1,0 +1,18 @@
+,mean,sd,0.025quant,0.975quant,Species
+size for the nbinomial observations (1/overdispersion),1.401,0.1952,1.055,1.822,Barred Owl
+Precision for alpha_i,4.982,2.534,1.789,11.46,Barred Owl
+Precision for tau_i,1841,2120,300.1,7228,Barred Owl
+Precision for kappa_k,2.196,0.4649,1.448,3.265,Barred Owl
+Precision for gamma_ij,1113,6493,24.48,7264,Barred Owl
+,,,,,
+size for the nbinomial observations (1/overdispersion),8.383,8.372,1.766,30.23,Great Horned Owl
+Precision for alpha_i,12.82,12.18,2.541,44.83,Great Horned Owl
+Precision for tau_i,48190,312400,757,319000,Great Horned Owl
+Precision for kappa_k,4.681,1.76,2.169,8.989,Great Horned Owl
+Precision for gamma_ij,6.194,2.876,2.412,13.46,Great Horned Owl
+,,,,,
+size for the nbinomial observations (1/overdispersion),2.656,0.7494,1.511,4.434,Northern Saw-whet Owl
+Precision for alpha_i,18.91,18.26,3.026,67.17,Northern Saw-whet Owl
+Precision for tau_i,13300,36450,733.4,77390,Northern Saw-whet Owl
+Precision for kappa_k,2.09,0.3999,1.427,2.994,Northern Saw-whet Owl
+Precision for gamma_ij,3.436,0.8635,2.056,5.426,Northern Saw-whet Owl
