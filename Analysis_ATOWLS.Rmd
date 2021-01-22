@@ -633,7 +633,9 @@ write.table(new_prov, paste(out.dir, "Tau_Prov_Prec.csv", sep="."), row.names = 
 
 Support function to calculate the variance sigma from tau (see page 120 Zuur 2017)
 
+alpha<-out1$marginals.hyperpar$'Precision for alpha_i'
 tau<-out1$marginals.hyperpar$'Precision for tau_i'
+
 
 MySqrt <- function(x) {1/sqrt(x)}
 sigma <- inla.emarginal(MySqrt, tau)
