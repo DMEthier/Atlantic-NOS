@@ -2,7 +2,7 @@
 
 ObservationCount1 = 1st minute + 2nd minute (i.e., silent listening period). 
 
-Cleaning script for these data can be found at DMEthier/National-NOS
+Data cleaning and manipulation script  can be found at DMEthier/National-NOS
 
 Install the required packages (some of these may no longer be needed)
 ```{r install packages, echo=FALSE, message=FALSE}
@@ -71,6 +71,11 @@ Create summary stats
 #Filter out non taret species. 
 obs <- obs %>% filter (CommonName %in% c("Barred Owl", "Boreal Owl", "Great Gray Owl", "Great Horned Owl", "Northern Saw-whet Owl", "Eastern Screeh-Owl", "Western Screech-Owl", "Long-eared Owl", "Short-eared Owl", "Northern Hawk Owl", "Northern Pygmy-Owl", "Snowy Owl", "Barn Owl", "Flammulated Owl"))
 
+#This was not fixed in underlying data. 
+if(obs$ProtocolCode=="37"){
+obs$StateProvince[obs$StateProvince  == "NS"]  <- "NB"  
+}
+
 #species by protocol summary. Check for missclassifications
 sp.prot<-obs %>% select(CommonName, collection, ProtocolCode, StateProvince) %>% distinct()
 sp.prot$count<-"x"
@@ -94,7 +99,7 @@ species.list <- unique(obs$CommonName)
 
 for(m in 1:length(species.list)) {
 
-#m<-1 #for testing each species
+# m<-1 #for testing each species
    
   sp.data <-NULL 
   sp.data <- filter(obs, CommonName == species.list[m]) %>%
@@ -108,23 +113,29 @@ sp.data <- left_join(event.data, sp.data, by = c("RouteIdentifier", "survey_year
 
 ##-----------------------------------------------------------
 # Limit to species observed at least once per route 
-# summarize survey site to determine which species have been observed at least once (looking at the total count column) those with sum <= 1 across all survey years will be dropped from analysis (implies never observed on a route (i.e., outside range or inappropraite habitat))
+# Summarize survey site to determine which species have been observed at least once (looking at the total count column) those with sum <= 1 across all survey years will be dropped from analysis (implies never observed on a route (i.e., outside range or inappropraite habitat))
 
   site.summ <- melt(sp.data, id.var = "RouteIdentifier",	measure.var = "ObservationCount1")
   site.summ <- cast(site.summ, RouteIdentifier ~ variable,	fun.aggregate="sum")
   site.sp.list <- unique(subset(site.summ, select = c("RouteIdentifier"), ObservationCount1 >= 1))
-  
-# limit raw data to these species, i.e., those that were observed at least once on a route 
+
+# Limit raw data to these species, i.e., those that were observed at least once on a route 
   sp.data <- merge(sp.data, site.sp.list, by = c("RouteIdentifier"))
 
+# Create summary of routes with owls detected per province  
+  sp.route.sum<-sp.data %>% group_by(StateProvince) %>% summarise(p.route = n_distinct(RouteIdentifier))
+  sp.route.sum$Species<-species.list[m]
+  
+write.table(sp.route.sum, paste(out.dir, "SpeciesRouteCountSummary.csv", sep="."), row.names = FALSE, append = TRUE, quote = FALSE, sep = ",", col.names = TRUE)
+
 ##-----------------------------------------------------------
-#Count the number of owls per route as the response varaible. The number of stop on a route can be used as a covarite in the model to control for route level effort
+# Count the number of owls per route as the response varaible. The number of stop on a route can be used as a covarite in the model to control for route level effort. Not used in Atlantic Canada because route are mostly complete. 
 sp.data<-sp.data %>% group_by(RouteIdentifier, survey_year, CollectorNumber, grid_id, nstop, StateProvince, bcr, latitude, longitude) %>% summarise(count1=sum(ObservationCount1))
 
 #-----------------------------------------------------------   
-#Create the offset variable which is the number of routes run in a year to control for changes in effor over time. Previously I was using the log transformed nroute as an offset (E), however, this assumes that doubling the number of routes will double the number of owls counted, which may not hold true. The other option is to add nroute as a covariate in the model (Zuur 2018 pg 445). 
+# Create the offset variable which is the number of routes run in a year to control for changes in effor over time. Previously I was using the log transformed nroute as an offset (E), however, this assumes that doubling the number of routes will double the number of owls counted, which may not hold true. The other option is to add nroute as a covariate in the model (Zuur 2018 pg 445). 
 
-#the spatailly expict apprach pools counts across geographic statum and deals with the issue of count circles becoming active or inactive over time, thus temporal variability in route level effort. 
+# The spatailly expict apprach pools counts across geographic statum and deals with the issue of count circles becoming active or inactive over time, thus temporal variability in route level effort. 
 
 #nroute<-NULL
 #nroute<-sp.data%>% group_by(survey_year) %>% summarise(nroute=n_distinct(RouteIdentifier))
@@ -173,8 +184,8 @@ proj4string(xy) <- CRS("+proj=longlat +datum=NAD83 +no_defs")  ## for example
 #assign to the same projection at the polygon feature
 ATOWLS_pt <- spTransform(xy, CRS("+proj=aea +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
 
-ATOWLS_Grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="ATOWLS_Grid")
-names(ATOWLS_Grid)[1] <- "grid_id"; head(ATOWLS_Grid@data) #"+proj=aea +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"
+ATOWLS_Grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="ATGrid_50Kv2")
+names(ATOWLS_Grid)[19] <- "grid_id"; head(ATOWLS_Grid@data) #"+proj=aea +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"
 
 nos_na_grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="nos_na_grid")
 nos_na_grid$na_id <- nos_na_grid$id; head(nos_na_grid@data)
@@ -200,7 +211,7 @@ route_per_cell <- sp.data %>%
   summarise(number_routes=sum(occupied))
 
 #ggplot(route_per_cell, aes(number_routes)) +
-#  geom_histogram(breaks=c(0:150), fill="gray60", color="white") +
+#  geom_histogram(breaks=c(0:15), fill="gray60", color="white") +
 #  xlab("Number of routes per grid cell") + ylab("Count")
 
 #summary(route_per_cell)
@@ -212,11 +223,12 @@ route_per_cell <- sp.data %>%
 ##Make neighbors
 nb1 <- poly2nb(ATOWLS_Grid, row.names=ATOWLS_Grid$grid_id); nb1
 
+#Output with the new 50K grid
 #Neighbour list object:
-#Number of regions: 25 
-#Number of nonzero links: 140 
-#Percentage nonzero weights: 22.4 
-#Average number of links: 5.6 
+#Number of regions: 241 
+#Number of nonzero links: 1534 
+#Percentage nonzero weights: 2.641139 
+#Average number of links: 6.365145 
 
 is.symmetric.nb(nb1, verbose = FALSE, force = TRUE)
 nb2INLA("nb1.graph", nb1)
