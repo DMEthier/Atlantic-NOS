@@ -1,0 +1,148 @@
+## R Markdown
+
+Spearman Rank Correlation between reponse varaibles: ObservationCount1 (2 min silent listening period) and ObservationCount (total count).
+
+Install the required packages 
+```{r install packages, echo=FALSE, message=FALSE}
+
+library(tidyverse)
+library(reshape)
+library(Hmisc)
+
+```
+
+
+Code to read and append the relevant files from the out directory. 
+Note: I manaully added the SpeicesCode to these files so that they could be distinguided. In future iterations, this should be added to the tables druing the analysis. 
+
+```{r pull multiple files, echo=FALSE, message=FALSE}
+
+#Read in the events data then filer for just ATOWLS 
+require(plyr)
+
+out.dir<-"output"
+my.files<-list.files(path = out.dir, patter ="*PosteriorSummary.csv", full.name=TRUE)
+res1<-ldply(my.files, read.csv)
+res1$Response<-"silent"
+
+my.files<-list.files(path = out.dir, patter ="*PosteriorSummary2.csv", full.name=TRUE)
+res2<-ldply(my.files, read.csv)
+res2$Response<-"total"
+
+#bind the two table together 
+res<-rbind(res1, res2)
+
+detach(package:plyr) #detach or this will cause an issue with dplyr
+
+```
+
+
+Write a speices specific loop to do the Spearman rank correlation. This will be done on both the abundance and trend paramaters and for each speices seperatly (with the exception of BOOW, which only have data for Response=="total")
+
+```{r SpearmanTau, echo=FALSE, message=FALSE}
+
+res<-res %>% filter(SpeciesCode!="BOOW")
+
+#prepare dataframe
+
+tau<-cast(res, SpeciesCode+prov+grid_id~Response, value="tau")
+
+sp.list<-unique(res$SpeciesCode)
+
+for (i in 1:length(sp.list)){
+  
+  i<-3 #for testing
+  
+  sp.tau<-tau %>% filter(SpeciesCode==sp.list[i])
+  
+  sp.tau<-na.omit(sp.tau)
+  
+  cor(sp.tau$silent, sp.tau$total, method = "spearman")
+
+#plot relationship  
+ggplot(data=sp.tau, aes(silent, total))+
+  geom_point()+
+  geom_abline()+
+  geom_hline(yintercept=0, linetype="dotted")+
+  geom_vline(xintercept=0, linetype="dotted")+
+  labs(x="Silent Listening Period Count", y="Total Count")
+  
+  
+  
+}# end speices loop
+
+
+```
+
+```{r SpearmanAlph, echo=FALSE, message=FALSE}
+
+res<-res %>% filter(SpeciesCode!="BOOW")
+
+alph<-cast(res, SpeciesCode+prov+grid_id~Response, value="alph")
+
+sp.list<-unique(res$SpeciesCode)
+
+for (m in 1:length(sp.list)){
+  
+  m<-2 #for testing
+  
+  sp.alph<-alph %>% filter(SpeciesCode==sp.list[m])
+  
+  sp.alph<-na.omit(sp.alph)
+  
+  cor(sp.alph$silent, sp.alph$total, method = "spearman")
+
+#plot relationship  
+ggplot(data=sp.alph, aes(silent, total))+
+  geom_point()+
+  geom_abline()+
+  geom_hline(yintercept=0, linetype="dotted")+
+  geom_vline(xintercept=0, linetype="dotted")+
+  labs(x="Silent Listening Period Count", y="Total Count")
+  
+  
+  
+}# end speices loop
+
+
+```
+
+Compare CI widths to assess the amount the precision of trend estiamtes
+
+```{r CI Width, echo=FALSE, message=FALSE}
+
+res<-res %>% filter(SpeciesCode!="BOOW")
+
+sp.list<-unique(res$SpeciesCode)
+
+for (k in 1:length(sp.list)){
+  
+  k<-3 #for testing
+  
+  sp.ci<-res %>% filter(SpeciesCode==sp.list[k])
+  
+  ggplot(data=sp.ci, aes(Response, tau_iw), group=Response)+
+  geom_boxplot()
+  
+#paired t-test to look at difference before and after
+  
+  cast.ci<-cast(sp.ci, SpeciesCode+prov+grid_id~Response, value="tau_iw")
+  cast.ci<-na.omit(cast.ci)
+  
+cast.ci$difference <- cast.ci$total - cast.ci$silent
+
+ggplot(cast.ci) +
+  aes(y = difference) +
+  geom_boxplot() +
+  theme_minimal()
+  
+test <- t.test(cast.ci$total, cast.ci$silent,
+  alternative = "less",
+  paired = TRUE)
+
+test  
+test$p.value
+
+}
+
+```
