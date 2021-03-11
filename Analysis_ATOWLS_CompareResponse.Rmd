@@ -39,21 +39,24 @@ detach(package:plyr) #detach or this will cause an issue with dplyr
 
 Write a speices specific loop to do the Spearman rank correlation. This will be done on both the abundance and trend paramaters and for each speices seperatly (with the exception of BOOW, which only have data for Response=="total")
 
+Since each province has the same playback protocol (mostly) in the Altantic region, these data can be pooled. If comparing across regions with different protocols, then they cannot be pooled. 
+
+
 ```{r SpearmanTau, echo=FALSE, message=FALSE}
 
-res<-res %>% filter(SpeciesCode!="BOOW")
+res<-res %>% filter(Species!="Boreal Owl")
 
 #prepare dataframe
 
-tau<-cast(res, SpeciesCode+prov+grid_id~Response, value="tau")
+tau<-cast(res, Species+StateProvince+grid_id~Response, value="tau")
 
-sp.list<-unique(res$SpeciesCode)
+sp.list<-unique(res$Species)
 
 for (i in 1:length(sp.list)){
   
   i<-3 #for testing
   
-  sp.tau<-tau %>% filter(SpeciesCode==sp.list[i])
+  sp.tau<-tau %>% filter(Species==sp.list[i])
   
   sp.tau<-na.omit(sp.tau)
   
@@ -76,17 +79,17 @@ ggplot(data=sp.tau, aes(silent, total))+
 
 ```{r SpearmanAlph, echo=FALSE, message=FALSE}
 
-res<-res %>% filter(SpeciesCode!="BOOW")
+res<-res %>% filter(Species!="Boreal Owl")
 
-alph<-cast(res, SpeciesCode+prov+grid_id~Response, value="alph")
+alph<-cast(res, Species+StateProvince+grid_id~Response, value="alph")
 
-sp.list<-unique(res$SpeciesCode)
+sp.list<-unique(res$Species)
 
 for (m in 1:length(sp.list)){
   
   m<-2 #for testing
   
-  sp.alph<-alph %>% filter(SpeciesCode==sp.list[m])
+  sp.alph<-alph %>% filter(Species==sp.list[m])
   
   sp.alph<-na.omit(sp.alph)
   
@@ -111,22 +114,22 @@ Compare CI widths to assess the amount the precision of trend estiamtes
 
 ```{r CI Width, echo=FALSE, message=FALSE}
 
-res<-res %>% filter(SpeciesCode!="BOOW")
+res<-res %>% filter(Species!="BOOW")
 
-sp.list<-unique(res$SpeciesCode)
+sp.list<-unique(res$Species)
 
 for (k in 1:length(sp.list)){
   
   k<-3 #for testing
   
-  sp.ci<-res %>% filter(SpeciesCode==sp.list[k])
+  sp.ci<-res %>% filter(Species==sp.list[k])
   
   ggplot(data=sp.ci, aes(Response, tau_iw), group=Response)+
   geom_boxplot()
   
 #paired t-test to look at difference before and after
   
-  cast.ci<-cast(sp.ci, SpeciesCode+prov+grid_id~Response, value="tau_iw")
+  cast.ci<-cast(sp.ci, Species+prov+grid_id~Response, value="tau_iw")
   cast.ci<-na.omit(cast.ci)
   
 cast.ci$difference <- cast.ci$total - cast.ci$silent

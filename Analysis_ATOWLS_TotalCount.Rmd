@@ -36,7 +36,7 @@ Code to read and append the relevant files from the out directory. This is Obser
 #Read file that was created in ArcGIS by spatailly joining the Events layer (created in the data manipulation code) with the grid cells spatil layer. Need to manual rename columns before importing into R
 
 #Contains Grid_ID, RouteID, CollectorNumber, and survey year.  
-grid<-read.csv("ATOWL_test_dat.csv")
+grid<-read.csv("ATOWL_dat.csv")
 
 max.yr<-2019
 
@@ -65,6 +65,14 @@ detach(package:plyr) #detach or this will cause an issue with dplyr
 
 ```
 
+```{r rawsummary, echo=FALSE, message=FALSE}
+
+obs.sum<-obs %>% group_by(survey_year, CommonName) %>% summarise(count = sum(ObservationCount))
+obs.sum<-cast(obs.sum, CommonName~survey_year, value="count")
+
+```
+
+
 Create summary stats
 ```{r sumstat, echo=FALSE, message=FALSE}
 
@@ -72,9 +80,9 @@ Create summary stats
 obs <- obs %>% filter (CommonName %in% c("Barred Owl", "Boreal Owl", "Great Gray Owl", "Great Horned Owl", "Northern Saw-whet Owl", "Eastern Screeh-Owl", "Western Screech-Owl", "Long-eared Owl", "Short-eared Owl", "Northern Hawk Owl", "Northern Pygmy-Owl", "Snowy Owl", "Barn Owl", "Flammulated Owl"))
 
 #This was not fixed in underlying data. 
-if(obs$ProtocolCode=="37"){
-obs$StateProvince[obs$StateProvince  == "NS"]  <- "NB"  
-}
+#if(obs$ProtocolCode=="37"){
+#obs$StateProvince[obs$StateProvince  == "NS"]  <- "NB"  
+#}
 
 #species by protocol summary. Check for missclassifications
 sp.prot<-obs %>% select(CommonName, collection, ProtocolCode, StateProvince) %>% distinct()
@@ -106,6 +114,15 @@ for(m in 1:length(species.list)) {
       droplevels()
   
   print(paste("Currently analyzing species ", m, "/", species.list[m], sep = "")) 
+  
+##----------------------------------------------------------
+#Observations per route summary
+route.sum<-sp.data %>% group_by(survey_year, RouteIdentifier) %>% summarise(count = sum(ObservationCount))
+route.sum<-cast(route.sum, RouteIdentifier~survey_year, value="count")
+
+#Observations per grid summary
+grid.sum<-sp.data %>% group_by(survey_year, grid_id) %>% summarise(count = sum(ObservationCount))
+grid.sum<-cast(grid.sum, grid_id~survey_year, value="count")  
 
 ##-----------------------------------------------------------
 #zero fill by merging with the events dataframe. 
@@ -169,33 +186,34 @@ sp.data <- sp.data %>% mutate(std_yr = survey_year - max.yr)
 ##-----------------------------------------------------------
 
 #Get grid data for plotting
-ATOWLS_Point <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="ATOWLS_Point") 
+#ATOWLS_Point <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="ATOWLS_Point") 
 # NAD83 (EPSG:4269) 
-head(ATOWLS_Point@data) #"+proj=longlat +datum=NAD83 +no_defs"
+#head(ATOWLS_Point@data) #"+proj=longlat +datum=NAD83 +no_defs"
 
 #Could use the leaflets package to map routes? Might be good for the web output.
 #map<-leaflet() %>% 
 #    addProviderTiles(providers$OpenStreetMap.Mapnik) %>% 
 #    addCircleMarkers(data=ATOWLS_Point) 
 
-xy <- data.frame(X = ATOWLS_Point@data$longitude, Y = ATOWLS_Point@data$latitude)
-coordinates(xy) <- c("X", "Y")
-proj4string(xy) <- CRS("+proj=longlat +datum=NAD83 +no_defs")  ## for example
+#xy <- data.frame(X = ATOWLS_Point@data$longitude, Y = ATOWLS_Point@data$latitude)
+#coordinates(xy) <- c("X", "Y")
+#proj4string(xy) <- CRS("+proj=longlat +datum=NAD83 +no_defs")  ## for example
 #assign to the same projection at the polygon feature
-ATOWLS_pt <- spTransform(xy, CRS("+proj=aea +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+#ATOWLS_pt <- spTransform(xy, CRS("+proj=aea +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
 
-ATOWLS_Grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="ATGrid_50Kv2")
+ATOWLS_Grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="ATGrid_50Kv4")
 names(ATOWLS_Grid)[19] <- "grid_id"; head(ATOWLS_Grid@data) #"+proj=aea +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"
 
-nos_na_grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="nos_na_grid")
-nos_na_grid$na_id <- nos_na_grid$id; head(nos_na_grid@data)
+#nos_na_grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="nos_na_grid")
+#nos_na_grid$na_id <- nos_na_grid$id; head(nos_na_grid@data)
 
-plot(nos_na_grid)
-plot(ATOWLS_Grid, col="red", add=T)
-grid1<-NULL
-grid1 <- as(ATOWLS_Grid, "sf")
-plot(ATOWLS_pt, col="blue", add=T) #this did not work correctly due to an issue with projection
-point1<-as(ATOWLS_pt, "sf")
+#plot(nos_na_grid)
+#plot(ATOWLS_Grid, col="red", add=T)
+#grid1<-NULL
+#grid1 <- as(ATOWLS_Grid, "sf")
+#plot(ATOWLS_pt, col="blue", add=T) #this did not work correctly due to an issue with projection
+#point1<-as(ATOWLS_pt, "sf")
+
 grid_key <- unique(sp.data[, c("grid_id", "bcr", "StateProvince")])
 row.names(grid_key) <- NULL
 
@@ -217,7 +235,7 @@ route_per_cell <- sp.data %>%
 #summary(route_per_cell)
 
 #print route_per_cell output table. This is also a map output.
-#write.csv(route_per_cell, paste(out.dir, species.list[m], ".route_per_cell.csv", sep=""))
+write.csv(route_per_cell, paste(out.dir, species.list[m], ".route_per_cell2.csv", sep=""))
 
 ##-----------------------------------------------------------
 ##Make neighbors
@@ -274,25 +292,25 @@ form1 <- count1 ~ -1 + # remove grand mean
 ##-----------------------------------------------------------
 # make and run model 
 # formula for the overdispersed Poisson (this did not improve the overdispersion)
-form2 <- count1 ~ -1 + # remove grand mean
+#form2 <- count1 ~ -1 + # remove grand mean
   # cell ICAR random intercepts
-  f(alpha_i, model="besag", graph=g1, constr=FALSE, scale.model=TRUE,
-    hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01)))) +
+#  f(alpha_i, model="besag", graph=g1, constr=FALSE, scale.model=TRUE,
+#    hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01)))) +
   # cell ICAR random effort slopes for nstops
   # not using effort correction for AT dataset alone
 #  f(eps_i, nstop, model="besag", graph=g1, constr=FALSE, scale.model=TRUE,
 #    hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01)))) +
   # cell ICAR random year slopes
-  f(tau_i, std_yr, model="besag", graph=g1, constr=FALSE, scale.model=TRUE,
-    hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01)))) +
+#  f(tau_i, std_yr, model="besag", graph=g1, constr=FALSE, scale.model=TRUE,
+#    hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01)))) +
   # random route-observer intercepts
-  f(kappa_k, model="iid", constr=TRUE,
-    hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01)))) +
+#  f(kappa_k, model="iid", constr=TRUE,
+#    hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01)))) +
  # cell-year effect
-  f(gamma_ij, model="iid", constr=TRUE, 
-   hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01)))) +
+#  f(gamma_ij, model="iid", constr=TRUE, 
+#   hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.01)))) +
  # Overdispersion  
-  f(id.iid, model="iid")
+#  f(id.iid, model="iid")
 
 ##-----------------------------------------------------------
 #Get results
@@ -304,13 +322,13 @@ out1<- inla(form1, family="nbinomial", data=sp.data,
             verbose=T)
 
 #Get results
-out2<- inla(form2, family="nbinomial", 
-            data = data.frame(sp.data, id.iid = 1:nrow(sp.data)),
-            control.compute=list(cpo=T, config=T, dic=TRUE),
-            control.inla=list(strategy="adaptive",
-                              int.strategy="auto"),
-            num.threads=3,
-            verbose=T)
+#out2<- inla(form2, family="nbinomial", 
+#            data = data.frame(sp.data, id.iid = 1:nrow(sp.data)),
+#            control.compute=list(cpo=T, config=T, dic=TRUE),
+#            control.inla=list(strategy="adaptive",
+#                              int.strategy="auto"),
+#            num.threads=3,
+#            verbose=T)
 
 
 # view summaries
@@ -376,7 +394,7 @@ pit2 <- ggplot(data=pit1, aes(x=PIT)) +
   ylab("Count"); pit2; summary(pit1$PIT)
 
 #print plot and then turn device off
-pdf(paste(out.dir, species.list[m], ".PITPlot.pdf", sep=""))
+pdf(paste(out.dir, species.list[m], ".PITPlot2.pdf", sep=""))
   try(print(pit2, silent=T))
 while(!is.null(dev.list())) dev.off()
 
@@ -478,7 +496,7 @@ write.table(tau_tot, paste(out.dir, "Tau_Tot2.csv", sep="."), row.names = FALSE,
 #removed esp
 
 post_sum<-NULL
-post_sum <- data.frame(grid_id=cells_with_counts,
+post_sum <- data.frame(alpha_i=cells_with_counts,
                        alph, alph_ll, alph_ul, alph_iw,
                        #eps, eps_ll, eps_ul, eps_iw, eps_sig=NA,
                        tau, tau_ll, tau_ul, tau_iw, tau_sig=NA)
@@ -488,20 +506,20 @@ post_sum <- data.frame(grid_id=cells_with_counts,
 post_sum$tau_sig <- ifelse((post_sum$tau_ll < 1 & post_sum$tau_ul > 1),
                            post_sum$tau_sig <- 0,
                            post_sum$tau_sig <- post_sum$tau)
-post_sum$prov <- grid_key$StateProvince[cells_with_counts]
 
 #summary(post_sum)
 
-#need to back assign the factor grid_id to its original value
-id_grid<-sp.data %>% ungroup() %>% dplyr::select(grid_id, alpha_i) %>% distinct()
-names(id_grid)[names(id_grid)=="alpha_i"] <- "id"
-names(post_sum)[names(post_sum)=="grid_id"]<-"id"
-post_sum<-merge(post_sum, id_grid, by="id")
+#need to back assign the factor alpha_id to its original value
+id_grid<-sp.data %>% ungroup() %>% dplyr::select(grid_id, alpha_i, StateProvince) %>% distinct()
+#names(id_grid)[names(id_grid)=="alpha_i"] <- "id"
+#names(post_sum)[names(post_sum)=="alpha_i"]<-"id"
+post_sum<-merge(post_sum, id_grid, by="alpha_i")
 post_sum$grid_id<-as.character(post_sum$grid_id)
 #add number of routes per cell to summary for plotting
 route_per_cell$grid_id<-as.character(route_per_cell$grid_id)
 post_sum <- left_join(post_sum, route_per_cell, by="grid_id")
 post_sum$number_routes[is.na(post_sum$number_routes)] <- 0
+post_sum$Species <- species.list[m]
 
 write.csv(post_sum, paste(out.dir, species.list[m], "PosteriorSummary2.csv", sep="."))
 
@@ -622,7 +640,7 @@ tau_p3 <- ggplot() +
  
 #print plot and then turn device off
 
-pdf(paste(out.dir, species.list[m], ".MultiMapPlot.pdf", sep=""))
+pdf(paste(out.dir, species.list[m], ".MultiMapPlot2.pdf", sep=""))
 multiplot(base1, alph_p1, tau_p2, route_p1, tau_p1, tau_p3, cols=2)
 while(!is.null(dev.list())) dev.off()
  
@@ -630,7 +648,7 @@ while(!is.null(dev.list())) dev.off()
 # aggregate results 
 # summarise at prov
 new_prov <- post_sum %>% 
-  group_by(prov) %>%
+  group_by(StateProvince) %>%
   summarise(new_med_tau=median(tau), new_med_prec=median(tau_iw),
             new_min_prec=min(tau_iw), new_max_prec=max(tau_iw))
 new_prov$Species <- species.list[m]
