@@ -37,6 +37,7 @@ Code to read and append the relevant files from the out directory. This is Obser
 
 #Contains Grid_ID, RouteID, CollectorNumber, and survey year.  
 grid<-read.csv("ATOWL_dat.csv")
+grid<-grid %>% distinct() #Manually remove duplicates. This is added because there were duplicates due to some records haivng missing BCR. This has been fixed in the national nos data cleaning step, but was not remapped for cell assignment. 
 
 max.yr<-2019
 
@@ -51,15 +52,22 @@ my.files<-list.files(path = out.dir, patter ="*EventData.csv", full.name=TRUE)
 event.data<-ldply(my.files, read.csv)
 
 #write out full events for plotting in ArcGIS
-write.csv(event.data, paste(out.dir, "FullEventData.csv", sep=""))
+#write.csv(event.data, paste(out.dir, "FullEventData.csv", sep=""))
 
-event.data<-event.data %>% filter (StateProvince %in% c("NB", "NS", "PE")) %>% droplevels()
+event.data<-event.data %>% filter (StateProvince %in% c("NB", "NS", "PE")) %>%  droplevels()
+
+#Need to remove route NS050. Form seems to be assigned to both NS and PE. Was not fixed in underlying data.
+event.data<-event.data %>% filter(RouteIdentifier!="NS050") %>% droplevels()
+
+
 write.csv(event.data, paste(out.dir, "ATOWLS.FullEventData.csv", sep=""))
 
 obs<-obs %>% filter (StateProvince %in% c("NB", "NS", "PE")) %>% droplevels()
+obs<-obs %>% filter(RouteIdentifier!="NS050") %>% droplevels()
 
 #join grid to event so that we have the needed cell id for the analysis
-event.data<-full_join(event.data, grid, by=c("RouteIdentifier", "survey_year", "CollectorNumber"))
+event.data<-left_join(event.data, grid, by=c("RouteIdentifier", "survey_year", "CollectorNumber"))
+
 
 detach(package:plyr) #detach or this will cause an issue with dplyr
 
@@ -70,11 +78,6 @@ Create summary stats
 
 #Filter out non taret species. 
 obs <- obs %>% filter (CommonName %in% c("Barred Owl", "Boreal Owl", "Great Gray Owl", "Great Horned Owl", "Northern Saw-whet Owl", "Eastern Screeh-Owl", "Western Screech-Owl", "Long-eared Owl", "Short-eared Owl", "Northern Hawk Owl", "Northern Pygmy-Owl", "Snowy Owl", "Barn Owl", "Flammulated Owl"))
-
-#This was not fixed in underlying data. 
-#if(obs$ProtocolCode=="37"){
-#obs$StateProvince[obs$StateProvince  == "NS"]  <- "NB"  
-#}
 
 #species by protocol summary. Check for missclassifications
 sp.prot<-obs %>% select(CommonName, collection, ProtocolCode, StateProvince) %>% distinct()
@@ -99,26 +102,26 @@ species.list <- unique(obs$CommonName)
 
 for(m in 1:length(species.list)) {
 
-# m<-1 #for testing each species
+ m<-2 #for testing each species
    
   sp.data <-NULL 
   sp.data <- filter(obs, CommonName == species.list[m]) %>%
       droplevels()
   
   print(paste("Currently analyzing species ", m, "/", species.list[m], sep = "")) 
-  
-##----------------------------------------------------------
-#Observations per route summary
-route.sum<-sp.data %>% group_by(survey_year, RouteIdentifier) %>% summarise(count = sum(ObservationCount))
-route.sum<-cast(route.sum, RouteIdentifier~survey_year, value="count")
-
-#Observations per grid summary
-grid.sum<-sp.data %>% group_by(survey_year, grid_id) %>% summarise(count = sum(ObservationCount))
-grid.sum<-cast(grid.sum, grid_id~survey_year, value="count")  
 
 ##-----------------------------------------------------------
 #zero fill by merging with the events dataframe. 
 sp.data <- left_join(event.data, sp.data, by = c("RouteIdentifier", "survey_year", "CollectorNumber")) %>% mutate(ObservationCount1 = replace(ObservationCount1, is.na(ObservationCount1), 0))
+
+##----------------------------------------------------------
+#Observations per route summary
+route.sum<-sp.data %>% group_by(survey_year, RouteIdentifier) %>% summarise(count = sum(ObservationCount1))
+route.sum<-cast(route.sum, RouteIdentifier~survey_year, value="count")
+
+#Observations per grid summary
+grid.sum<-sp.data %>% group_by(survey_year, grid_id) %>% summarise(count = sum(ObservationCount1))
+grid.sum<-cast(grid.sum, grid_id~survey_year, value="count")  
 
 ##-----------------------------------------------------------
 # Limit to species observed at least once per route 
@@ -193,8 +196,8 @@ sp.data <- sp.data %>% mutate(std_yr = survey_year - max.yr)
 #assign to the same projection at the polygon feature
 #ATOWLS_pt <- spTransform(xy, CRS("+proj=aea +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
 
-#ATOWLS_Grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="ATGrid_50Kv4")
-#names(ATOWLS_Grid)[19] <- "grid_id"; head(ATOWLS_Grid@data) #"+proj=aea +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"
+ATOWLS_Grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="ATGrid_50Kv4")
+names(ATOWLS_Grid)[19] <- "grid_id" #head(ATOWLS_Grid@data) #"+proj=aea +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"
 
 #nos_na_grid <- readOGR(dsn="C:/Users/dethier/Documents/ethier-scripts/Atlantic-NOS/Data", layer="nos_na_grid")
 #nos_na_grid$na_id <- nos_na_grid$id; head(nos_na_grid@data)
@@ -655,10 +658,27 @@ write.table(new_prov, paste(out.dir, "Tau_Prov_Prec.csv", sep="."), row.names = 
 Support function to calculate the variance sigma from tau (see page 120 Zuur 2017)
 
 alpha<-out1$marginals.hyperpar$'Precision for alpha_i'
+
 tau<-out1$marginals.hyperpar$'Precision for tau_i'
 
 
 MySqrt <- function(x) {1/sqrt(x)}
-sigma <- inla.emarginal(MySqrt, tau)
+sigma <- inla.emarginal(MySqrt, alpha)
 sigma
+
+#Tools to check for over dispersion
+remotes::install_github("inbo/inlatools")
+library(inlatools)
+
+plot(dispersion_check(out1))
+
+
+#Dispersion Statistic 
+mu.op<-out1$summary.fitted.values[,"mean"]
+E.op<-(sp.data$count1-mu.op)/ sqrt(mu.op) #Pearson residuals
+N<-nrow(sp.data)
+p<-nrow(out1$summary.fixed)
+Dispersion.op<-sum(E.op^2)/(N-p)
+print(paste("Dispersions Statistic Overdispersed = ", Dispersion.op, sep = ""))
+
 

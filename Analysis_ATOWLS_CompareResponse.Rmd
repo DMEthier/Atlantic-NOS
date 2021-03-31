@@ -11,7 +11,6 @@ library(Hmisc)
 
 ```
 
-
 Code to read and append the relevant files from the out directory. 
 Note: I manaully added the SpeicesCode to these files so that they could be distinguided. In future iterations, this should be added to the tables druing the analysis. 
 
@@ -36,10 +35,9 @@ detach(package:plyr) #detach or this will cause an issue with dplyr
 
 ```
 
-
 Write a speices specific loop to do the Spearman rank correlation. This will be done on both the abundance and trend paramaters and for each speices seperatly (with the exception of BOOW, which only have data for Response=="total")
 
-Since each province has the same playback protocol (mostly) in the Altantic region, these data can be pooled. If comparing across regions with different protocols, then they cannot be pooled. 
+Since each province has the same playback protocol (mostly) in the Altantic region, these data can be pooled. If comparing across regions with different protocols, then they cannot necassrily be pooled. 
 
 
 ```{r SpearmanTau, echo=FALSE, message=FALSE}
@@ -49,27 +47,45 @@ res<-res %>% filter(Species!="Boreal Owl")
 #prepare dataframe
 
 tau<-cast(res, Species+StateProvince+grid_id~Response, value="tau")
+tau<-tau %>% rename(silent_tau = silent, total_tau=total)
+
+#to plot upper and lower CI
+tau_cl<-cast(res, Species+StateProvince+grid_id~Response, value="tau_ll")
+tau_cl<-tau_cl %>% select(silent, total) %>% rename(silent_tau_cl = silent, total_tau_cl=total)
+
+tau_cu<-cast(res, Species+StateProvince+grid_id~Response, value="tau_ul")
+tau_cu<-tau_cu %>% select(silent, total) %>% rename(silent_tau_cu = silent, total_tau_cu=total)
+
+tau<-cbind(tau, tau_cl, tau_cu)
 
 sp.list<-unique(res$Species)
 
 for (i in 1:length(sp.list)){
   
-  i<-3 #for testing
+  i<-1 #for testing
   
   sp.tau<-tau %>% filter(Species==sp.list[i])
   
   sp.tau<-na.omit(sp.tau)
   
-  cor(sp.tau$silent, sp.tau$total, method = "spearman")
+  cor(sp.tau$silent_tau, sp.tau$total_tau, method = "spearman")
 
 #plot relationship  
-ggplot(data=sp.tau, aes(silent, total))+
+ggplot(data=sp.tau, aes(silent_tau, total_tau))+
   geom_point()+
+#geom_errorbar(aes(ymin = total_tau_cl,ymax = total_tau_cu)) + 
+#geom_errorbarh(aes(xmin = silent_tau_cl,xmax = silent_tau_cu))+
   geom_abline()+
   geom_hline(yintercept=0, linetype="dotted")+
   geom_vline(xintercept=0, linetype="dotted")+
   labs(x="Silent Listening Period Count", y="Total Count")
   
+
+ggplot(data = df,aes(x = x,y = y)) + 
+    geom_point() + 
+    geom_errorbar(aes(ymin = ymin,ymax = ymax)) + 
+    geom_errorbarh(aes(xmin = xmin,xmax = xmax))
+
   
   
 }# end speices loop
@@ -82,25 +98,37 @@ ggplot(data=sp.tau, aes(silent, total))+
 res<-res %>% filter(Species!="Boreal Owl")
 
 alph<-cast(res, Species+StateProvince+grid_id~Response, value="alph")
+alph<-alph %>% rename(silent_alph = silent, total_alph=total)
+
+#to plot upper and lower CI
+alph_cl<-cast(res, Species+StateProvince+grid_id~Response, value="alph_ll")
+alph_cl<-alph_cl %>% select(silent, total) %>% rename(silent_alph_cl = silent, total_alph_cl=total)
+
+alph_cu<-cast(res, Species+StateProvince+grid_id~Response, value="alph_ul")
+alph_cu<-alph_cu %>% select(silent, total) %>% rename(silent_alph_cu = silent, total_alph_cu=total)
+
+alph<-cbind(alph, alph_cl, alph_cu)
 
 sp.list<-unique(res$Species)
 
 for (m in 1:length(sp.list)){
   
-  m<-2 #for testing
+  m<-3 #for testing
   
   sp.alph<-alph %>% filter(Species==sp.list[m])
   
   sp.alph<-na.omit(sp.alph)
   
-  cor(sp.alph$silent, sp.alph$total, method = "spearman")
+  cor.test(sp.alph$silent_alph, sp.alph$total_alph, method = "spearman")
 
 #plot relationship  
-ggplot(data=sp.alph, aes(silent, total))+
+ggplot(data=sp.alph, aes(silent_alph, total_alph))+
   geom_point()+
-  geom_abline()+
-  geom_hline(yintercept=0, linetype="dotted")+
-  geom_vline(xintercept=0, linetype="dotted")+
+  #geom_abline()+
+  #geom_hline(yintercept=0, linetype="dotted")+
+  #geom_vline(xintercept=0, linetype="dotted")+
+  #geom_errorbar(aes(ymin = total_alph_cl,ymax = total_alph_cu)) + 
+  #geom_errorbarh(aes(xmin = silent_alph_cl,xmax = silent_alph_cu))+
   labs(x="Silent Listening Period Count", y="Total Count")
   
   
@@ -120,7 +148,7 @@ sp.list<-unique(res$Species)
 
 for (k in 1:length(sp.list)){
   
-  k<-3 #for testing
+  k<-1 #for testing
   
   sp.ci<-res %>% filter(Species==sp.list[k])
   
@@ -129,7 +157,7 @@ for (k in 1:length(sp.list)){
   
 #paired t-test to look at difference before and after
   
-  cast.ci<-cast(sp.ci, Species+prov+grid_id~Response, value="tau_iw")
+  cast.ci<-cast(sp.ci, Species+StateProvince+grid_id~Response, value="tau_iw")
   cast.ci<-na.omit(cast.ci)
   
 cast.ci$difference <- cast.ci$total - cast.ci$silent
@@ -146,6 +174,56 @@ test <- t.test(cast.ci$total, cast.ci$silent,
 test  
 test$p.value
 
+}
+
+```
+
+Prepare data for plotting in ArcGIS
+
+```{r cast multiple files, echo=FALSE, message=FALSE}
+
+res<-res %>% filter(Species!="Boreal Owl")
+
+out.dir<-"output/2019"
+
+#recast tables
+alph<-cast(res, Species+StateProvince+grid_id~Response, value="alph")
+alph<-alph %>% rename(silent_alph = silent, total_alph=total)
+
+#to plot upper and lower CI
+alph_cl<-cast(res, Species+StateProvince+grid_id~Response, value="alph_ll")
+alph_cl<-alph_cl %>% select(silent, total) %>% rename(silent_alph_cl = silent, total_alph_cl=total)
+
+alph_cu<-cast(res, Species+StateProvince+grid_id~Response, value="alph_ul")
+alph_cu<-alph_cu %>% select(silent, total) %>% rename(silent_alph_cu = silent, total_alph_cu=total)
+
+alph<-cbind(alph, alph_cl, alph_cu)
+
+tau<-cast(res, Species+StateProvince+grid_id~Response, value="tau")
+tau<-tau %>% rename(silent_tau = silent, total_tau=total)
+
+#to plot upper and lower CI
+tau_cl<-cast(res, Species+StateProvince+grid_id~Response, value="tau_ll")
+tau_cl<-tau_cl %>% select(silent, total) %>% rename(silent_tau_cl = silent, total_tau_cl=total)
+
+tau_cu<-cast(res, Species+StateProvince+grid_id~Response, value="tau_ul")
+tau_cu<-tau_cu %>% select(silent, total) %>% rename(silent_tau_cu = silent, total_tau_cu=total)
+
+tau<-cbind(tau, tau_cl, tau_cu)
+
+post<-full_join(alph, tau, by=c("Species", "StateProvince", "grid_id"))
+
+
+sp.list<-unique(post$Species)
+
+for (l in 1:length(sp.list)){
+  
+  #l<-1 #for testing
+  
+  sp.post<-post %>% filter(Species==sp.list[l])
+  
+  write.table(sp.post, paste(out.dir, sp.list[l], "PosteriorArcPlot.csv", sep="."), row.names = FALSE, append = FALSE, quote = FALSE, sep = ",", col.names = TRUE)
+  
 }
 
 ```
