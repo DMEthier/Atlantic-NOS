@@ -1,24 +1,42 @@
 mean,SD,0.025quant,0.975quant,Speices
-4.5,0.149,4.204,4.827,Barred Owl
-37.67,0.91,36.38,39.84,Barred Owl
-185.8,4.783,174.7,192.6,Barred Owl
-1.954,0.1947,1.519,2.241,Barred Owl
-80.71,15.23,53.34,122.6,Barred Owl
+4.681,0.1317,4.401,4.962,Barred Owl
+55.62,0.5986,54.43,56.99,Barred Owl
+501.7,5.291,491.2,513.9,Barred Owl
+2.243,0.0506,2.143,2.361,Barred Owl
+190.2,370.6,25.59,957.3,Barred Owl
 mean,SD,0.025quant,0.975quant,Speices
-0.7989,0.05487,0.6861,0.9078,Boreal Owl
-10.15,0.06013,10.02,10.29,Boreal Owl
-678.4,4.018,669.9,687.8,Boreal Owl
-3.218,0.2316,2.745,3.799,Boreal Owl
-2.685,0.436,1.833,3.931,Boreal Owl
+12.95,4.198,8.063,23.81,Boreal Owl
+4.228,0.4879,3.42,5.326,Boreal Owl
+92.93,9.68,74.13,111.9,Boreal Owl
+2.338,0.2885,1.807,2.939,Boreal Owl
+1.249,0.381,0.7926,2.238,Boreal Owl
 mean,SD,0.025quant,0.975quant,Speices
-3.285,0.2061,2.874,3.787,Great Horned Owl
-33.12,3.102,26.97,40.84,Great Horned Owl
-292,6.622,281.1,307.4,Great Horned Owl
-2.387,0.1744,1.998,2.672,Great Horned Owl
-4.676,0.2828,4.106,5.371,Great Horned Owl
+3.561,0.3578,2.975,4.379,Great Horned Owl
+33.92,0.4379,33,34.95,Great Horned Owl
+796.6,189.4,416.2,1119,Great Horned Owl
+2.295,0.07567,2.139,2.476,Great Horned Owl
+4.561,0.9014,2.7,6.065,Great Horned Owl
 mean,SD,0.025quant,0.975quant,Speices
-3.447,0.303,2.808,4.161,Northern Saw-whet Owl
-4.557,0.06817,4.416,4.707,Northern Saw-whet Owl
-1816,41.45,1732,1907,Northern Saw-whet Owl
-2.654,0.1072,2.433,2.875,Northern Saw-whet Owl
-6.892,0.8802,5.273,9.072,Northern Saw-whet Owl
+3.238,0.1412,2.948,3.563,Northern Saw-whet Owl
+16.05,0.3523,15.41,16.85,Northern Saw-whet Owl
+1253,27.04,1204,1314,Northern Saw-whet Owl
+2.005,0.06139,1.887,2.143,Northern Saw-whet Owl
+4.332,0.203,3.947,4.798,Northern Saw-whet Owl
+mean,SD,0.025quant,0.975quant,Speices
+4.681,0.1317,4.401,4.962,Barred Owl
+55.62,0.5986,54.43,56.99,Barred Owl
+501.7,5.291,491.2,513.9,Barred Owl
+2.243,0.0506,2.143,2.361,Barred Owl
+190.2,370.6,25.59,957.3,Barred Owl
+mean,SD,0.025quant,0.975quant,Speices
+3.424,0.3728,2.673,4.301,Boreal Owl
+16.96,0.1281,16.67,17.26,Boreal Owl
+1303,10.64,1279,1328,Boreal Owl
+2.922,0.3116,2.27,3.714,Boreal Owl
+0.9737,0.05979,0.8439,1.125,Boreal Owl
+mean,SD,0.025quant,0.975quant,Speices
+3.561,0.3578,2.975,4.379,Great Horned Owl
+33.92,0.4379,33,34.95,Great Horned Owl
+796.6,189.4,416.2,1119,Great Horned Owl
+2.295,0.07567,2.139,2.476,Great Horned Owl
+4.561,0.9014,2.7,6.065,Great Horned Owl

@@ -1,15 +1,26 @@
 StateProvince,p.route,Species
 NB,106,Barred Owl
-NS,50,Barred Owl
+NS,49,Barred Owl
 PE,24,Barred Owl
 StateProvince,p.route,Species
 NB,28,Boreal Owl
 PE,12,Boreal Owl
 StateProvince,p.route,Species
 NB,87,Great Horned Owl
-NS,44,Great Horned Owl
+NS,43,Great Horned Owl
 PE,22,Great Horned Owl
 StateProvince,p.route,Species
 NB,99,Northern Saw-whet Owl
-NS,49,Northern Saw-whet Owl
+NS,48,Northern Saw-whet Owl
 PE,24,Northern Saw-whet Owl
+StateProvince,p.route,Species
+NB,106,Barred Owl
+NS,49,Barred Owl
+PE,24,Barred Owl
+StateProvince,p.route,Species
+NB,28,Boreal Owl
+PE,12,Boreal Owl
+StateProvince,p.route,Species
+NB,87,Great Horned Owl
+NS,43,Great Horned Owl
+PE,22,Great Horned Owl
