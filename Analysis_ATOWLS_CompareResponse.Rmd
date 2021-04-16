@@ -62,13 +62,13 @@ sp.list<-unique(res$Species)
 
 for (i in 1:length(sp.list)){
   
-  i<-1 #for testing
+  i<-3 #for testing
   
   sp.tau<-tau %>% filter(Species==sp.list[i])
   
   sp.tau<-na.omit(sp.tau)
   
-  cor(sp.tau$silent_tau, sp.tau$total_tau, method = "spearman")
+  cor.test(sp.tau$silent_tau, sp.tau$total_tau, method = "spearman")
 
 #plot relationship  
 ggplot(data=sp.tau, aes(silent_tau, total_tau))+
